@@ -1,0 +1,284 @@
+package es.noa.rad;
+
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+import javax.imageio.ImageIO;
+import javax.swing.BorderFactory;
+import javax.swing.BoxLayout;
+import javax.swing.ImageIcon;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
+
+/**
+ * MapMapperUtility - Utilidad para comparar si una imagen contiene
+ * pequeñas imágenes de otra.
+ *
+ * Paso 3: Carga del mapa (clear-map) y visualización junto al tileset y tiles.
+ *
+ * Estructura del tileset:
+ *   - Borde exterior de 1px rojo entre cada tile
+ *   - Cada tile: 16 x 16 píxeles
+ *   - Paso entre tiles (tile + borde): 17 px
+ *   - Tiles vacíos: color sólido amarillo
+ */
+public class MapMapperUtility {
+
+    private static final String TILESET_PATH = "/assets/map/world/tileset/clear-tiles.png";
+    private static final String MAP_PATH     = "/assets/map/world/clear-map.png";
+
+    // Tamaño de cada tile en píxeles
+    private static final int TILE_SIZE    = 16;
+    // Grosor del borde rojo entre tiles
+    private static final int BORDER_SIZE  = 1;
+    // Paso de grid: tile + borde
+    private static final int TILE_STEP    = TILE_SIZE + BORDER_SIZE;
+    // Offset inicial (borde exterior izquierdo/superior)
+    private static final int GRID_OFFSET  = 1;
+    // Factor de escala para mostrar los tiles ampliados
+    private static final int DISPLAY_SCALE = 4;
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(MapMapperUtility::run);
+    }
+
+    private static void run() {
+        // --- Tileset ---
+        BufferedImage tilesetImage = loadImage(TILESET_PATH);
+        if (tilesetImage == null) {
+            System.err.println("No se pudo cargar el tileset: " + TILESET_PATH);
+            return;
+        }
+
+        int cols = (tilesetImage.getWidth()  - GRID_OFFSET) / TILE_STEP;
+        int rows = (tilesetImage.getHeight() - GRID_OFFSET) / TILE_STEP;
+
+        System.out.println("=== TILESET ===");
+        System.out.println("Dimensiones: " + tilesetImage.getWidth() + " x " + tilesetImage.getHeight() + " px");
+        System.out.println("Cuadrícula detectada: " + cols + " columnas x " + rows + " filas = " + (cols * rows) + " tiles");
+
+        List<TileEntry> tiles = extractTiles(tilesetImage, cols, rows);
+
+        long nonEmpty = tiles.stream().filter(t -> !t.empty).count();
+        System.out.println("Tiles con contenido: " + nonEmpty + " / " + tiles.size());
+
+        // --- Mapa ---
+        System.out.println("\n=== MAPA ===");
+        BufferedImage mapImage = loadImage(MAP_PATH);
+        if (mapImage == null) {
+            System.err.println("No se pudo cargar el mapa: " + MAP_PATH);
+            return;
+        }
+        System.out.println("Mapa cargado correctamente.");
+        System.out.println("Dimensiones: " + mapImage.getWidth() + " x " + mapImage.getHeight() + " px");
+
+        // --- Análisis ---
+        System.out.println("\n=== ANÁLISIS ===");
+        TileEntry[][] grid = analyzeMap(mapImage, tiles);
+        BufferedImage analyzedImage = buildAnalyzedImage(grid);
+
+        showUI(tilesetImage, tiles, mapImage, analyzedImage);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Carga
+    // ---------------------------------------------------------------------------
+
+    /**
+     * Carga una imagen desde el classpath.
+     */
+    private static BufferedImage loadImage(String path) {
+        try (InputStream is = MapMapperUtility.class.getResourceAsStream(path)) {
+            if (is == null) {
+                System.err.println("Recurso no encontrado en el classpath: " + path);
+                return null;
+            }
+            return ImageIO.read(is);
+        } catch (IOException e) {
+            System.err.println("Error al leer la imagen '" + path + "': " + e.getMessage());
+            return null;
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Extracción de tiles
+    // ---------------------------------------------------------------------------
+
+    /**
+     * Extrae todos los tiles de la imagen del tileset.
+     * Cada tile ocupa TILE_SIZE x TILE_SIZE píxeles comenzando en
+     * (GRID_OFFSET + col*TILE_STEP, GRID_OFFSET + row*TILE_STEP).
+     */
+    private static List<TileEntry> extractTiles(BufferedImage src, int cols, int rows) {
+        List<TileEntry> result = new ArrayList<>();
+
+        for (int row = 0; row < rows; row++) {
+            for (int col = 0; col < cols; col++) {
+                int x = GRID_OFFSET + col * TILE_STEP;
+                int y = GRID_OFFSET + row * TILE_STEP;
+
+                BufferedImage tile = src.getSubimage(x, y, TILE_SIZE, TILE_SIZE);
+                boolean empty = isTileEmpty(tile);
+                int index = row * cols + col;
+
+                result.add(new TileEntry(index, col, row, tile, empty));
+                System.out.printf("  Tile [%2d] (%d,%d) -> %s%n",
+                        index, col, row, empty ? "VACÍA (amarillo)" : "con contenido");
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Determina si un tile está vacío comprobando si todos sus píxeles
+     * son de color sólido amarillo (R>=200, G>=200, B<=80).
+     */
+    private static boolean isTileEmpty(BufferedImage tile) {
+        for (int py = 0; py < tile.getHeight(); py++) {
+            for (int px = 0; px < tile.getWidth(); px++) {
+                Color c = new Color(tile.getRGB(px, py), true);
+                boolean isYellow = c.getRed() >= 200 && c.getGreen() >= 200 && c.getBlue() <= 80;
+                if (!isYellow) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Escala una imagen al factor DISPLAY_SCALE usando interpolación vecino más próximo
+     * (para mantener el aspecto pixel-art).
+     */
+    private static BufferedImage scaleTile(BufferedImage src) {
+        int w = src.getWidth()  * DISPLAY_SCALE;
+        int h = src.getHeight() * DISPLAY_SCALE;
+        BufferedImage scaled = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = scaled.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+        g.drawImage(src, 0, 0, w, h, null);
+        g.dispose();
+        return scaled;
+    }
+
+    // ---------------------------------------------------------------------------
+    // Visualización
+    // ---------------------------------------------------------------------------
+
+    /**
+     * Muestra tres paneles:
+     *   - Izquierda:  imagen completa del tileset (escalada).
+     *   - Centro:     imagen del mapa (escalada).
+     *   - Derecha:    lista con cada tile extraída (solo las que tienen contenido).
+     */
+    private static void showUI(BufferedImage tilesetImage, List<TileEntry> tiles, BufferedImage mapImage) {
+        JFrame frame = new JFrame("MapMapperUtility - Tileset & Mapa: clear-tiles / clear-map");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+
+        // --- Panel izquierdo: tileset completo ---
+        BufferedImage scaledTileset = scaleTile(tilesetImage);
+        JLabel tilesetLabel = new JLabel(new ImageIcon(scaledTileset));
+        JScrollPane leftScroll = new JScrollPane(tilesetLabel);
+        leftScroll.setPreferredSize(new Dimension(scaledTileset.getWidth() + 30, 600));
+        leftScroll.setBorder(BorderFactory.createTitledBorder(
+                "Tileset: clear-tiles (" + tilesetImage.getWidth() + "x" + tilesetImage.getHeight() + " px, x" + DISPLAY_SCALE + ")"));
+
+        // --- Panel central: mapa ---
+        BufferedImage scaledMap = scaleTile(mapImage);
+        JLabel mapLabel = new JLabel(new ImageIcon(scaledMap));
+        JScrollPane centerScroll = new JScrollPane(mapLabel);
+        centerScroll.setPreferredSize(new Dimension(600, 600));
+        centerScroll.setBorder(BorderFactory.createTitledBorder(
+                "Mapa: clear-map (" + mapImage.getWidth() + "x" + mapImage.getHeight() + " px, x" + DISPLAY_SCALE + ")"));
+        centerScroll.getVerticalScrollBar().setUnitIncrement(16);
+        centerScroll.getHorizontalScrollBar().setUnitIncrement(16);
+
+        // --- Panel derecho: lista de tiles extraídas ---
+        JPanel tilesPanel = new JPanel();
+        tilesPanel.setLayout(new BoxLayout(tilesPanel, BoxLayout.Y_AXIS));
+        tilesPanel.setBackground(Color.DARK_GRAY);
+
+        for (TileEntry entry : tiles) {
+            if (entry.empty) continue;
+
+            JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+            row.setBackground(Color.DARK_GRAY);
+            row.setMaximumSize(new Dimension(Integer.MAX_VALUE, TILE_SIZE * DISPLAY_SCALE + 20));
+
+            BufferedImage scaled = scaleTile(entry.image);
+            JLabel imgLabel = new JLabel(new ImageIcon(scaled));
+            imgLabel.setPreferredSize(new Dimension(scaled.getWidth(), scaled.getHeight()));
+            imgLabel.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
+
+            JLabel infoLabel = new JLabel(
+                    String.format("Tile #%02d  (col %d, fila %d)", entry.index, entry.col, entry.row));
+            infoLabel.setForeground(Color.WHITE);
+            infoLabel.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+            infoLabel.setHorizontalAlignment(SwingConstants.LEFT);
+
+            row.add(imgLabel);
+            row.add(infoLabel);
+            tilesPanel.add(row);
+        }
+
+        JScrollPane rightScroll = new JScrollPane(tilesPanel);
+        rightScroll.setPreferredSize(new Dimension(300, 600));
+        rightScroll.getVerticalScrollBar().setUnitIncrement(16);
+
+        long nonEmpty = tiles.stream().filter(t -> !t.empty).count();
+        JLabel rightTitle = new JLabel(" Tiles con contenido (" + nonEmpty + " / " + tiles.size() + ")");
+        rightTitle.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+        JPanel rightPanel = new JPanel(new BorderLayout());
+        rightPanel.add(rightTitle, BorderLayout.NORTH);
+        rightPanel.add(rightScroll, BorderLayout.CENTER);
+
+        // --- Layout: tileset | mapa | tiles ---
+        JSplitPane rightSplit  = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, centerScroll, rightPanel);
+        rightSplit.setResizeWeight(0.7);
+        JSplitPane mainSplit   = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftScroll, rightSplit);
+        mainSplit.setResizeWeight(0.2);
+
+        frame.getContentPane().add(mainSplit, BorderLayout.CENTER);
+        frame.pack();
+        frame.setLocationRelativeTo(null);
+        frame.setVisible(true);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Clases de soporte
+    // ---------------------------------------------------------------------------
+
+    /** Representa un tile extraído del tileset. */
+    private static class TileEntry {
+        final int index;
+        final int col;
+        final int row;
+        final BufferedImage image;
+        final boolean empty;
+
+        TileEntry(int index, int col, int row, BufferedImage image, boolean empty) {
+            this.index = index;
+            this.col   = col;
+            this.row   = row;
+            this.image = image;
+            this.empty = empty;
+        }
+    }
+}
