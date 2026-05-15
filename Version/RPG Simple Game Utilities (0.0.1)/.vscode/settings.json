@@ -1,0 +1,18 @@
+{
+    "terminal.integrated.env.windows": {
+        "JAVA_HOME": "C:\\Users\\x922180\\TCN-IDE\\eclipse-jee-2022-12-R-win32-x86_64\\jdk\\Temurin-21.0.9+10",
+        "MAVEN_HOME": "C:\\Users\\x922180\\TCN-IDE\\eclipse-jee-2022-12-R-win32-x86_64\\Maven",
+        "PATH": "C:\\Users\\x922180\\TCN-IDE\\eclipse-jee-2022-12-R-win32-x86_64\\jdk\\Temurin-21.0.9+10\\bin;C:\\Users\\x922180\\TCN-IDE\\eclipse-jee-2022-12-R-win32-x86_64\\Maven\\bin;${env:PATH}"
+    },
+    "java.configuration.runtimes": [
+        {
+            "name": "JavaSE-17",
+            "path": "C:\\Users\\x922180\\TCN-IDE\\eclipse-jee-2022-12-R-win32-x86_64\\jdk\\Temurin-21.0.9+10",
+            "default": true
+        }
+    ],
+    "java.home": "C:\\Users\\x922180\\TCN-IDE\\eclipse-jee-2022-12-R-win32-x86_64\\jdk\\Temurin-21.0.9+10",
+    "maven.executable.path": "C:\\Users\\x922180\\TCN-IDE\\eclipse-jee-2022-12-R-win32-x86_64\\Maven\\bin\\mvn.cmd",
+    "java.configuration.updateBuildConfiguration": "interactive",
+    "java.compile.nullAnalysis.mode": "automatic"
+}

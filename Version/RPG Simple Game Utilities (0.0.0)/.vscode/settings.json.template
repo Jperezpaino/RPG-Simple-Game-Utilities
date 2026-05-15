@@ -1,0 +1,21 @@
+{
+    "java.home": "/path/to/your/java17/installation",
+    "maven.executable.path": "/path/to/your/maven/bin/mvn",
+    "java.compile.nullAnalysis.mode": "automatic",
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "java.saveActions.organizeImports": true,
+    "java.format.settings.url": null,
+    "java.format.settings.profile": null,
+    "files.exclude": {
+        "**/target": true,
+        "**/.mvn": true,
+        "**/data": true
+    },
+    "java.project.sourcePaths": [
+        "src/main/java"
+    ],
+    "java.project.outputPath": "target/classes",
+    "spring.initializr.defaultLanguage": "Java",
+    "spring.initializr.defaultJavaVersion": "17",
+    "spring.initializr.defaultPackaging": "Jar"
+}
